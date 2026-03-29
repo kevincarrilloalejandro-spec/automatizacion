@@ -434,6 +434,11 @@
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
+            <!-- Waiting Indicator -->
+            <div id="waitingIndicator" class="hidden" style="padding: 10px 20px; background: rgba(37, 211, 102, 0.05); border-top: 1px solid rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.8rem; color: var(--whatsapp-green);">
+                <div class="dot-green" style="width: 6px; height: 6px;"></div>
+                <span id="waitingText">Esperando respuesta... El equipo está revisando tu mensaje</span>
+            </div>
         </div>
     </div>
 
@@ -453,12 +458,27 @@
         };
 
         let userName = '';
-        let currentState = 'GREETING'; // GREETING -> NAME_INPUT -> OPTION_SELECT -> MESSAGE_INPUT -> SENDING
+        let conversationId = '';
+        let currentState = 'GREETING'; 
 
         const chatMessages = document.getElementById('chatMessages');
         const chatInput = document.getElementById('chatInput');
         const sendButton = document.getElementById('sendButton');
         const inputContainer = document.getElementById('inputContainer');
+        const waitingIndicator = document.getElementById('waitingIndicator');
+        const waitingText = document.getElementById('waitingText');
+
+        // --- UTILS ---
+        function generarId() {
+            return 'conv_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Shortcut to admin: Shift + Alt + R
+        document.addEventListener('keydown', (e) => {
+            if (e.shiftKey && e.altKey && e.code === 'KeyR') {
+                window.location.href = 'admin-chat.html';
+            }
+        });
 
         // --- BACKGROUND BUBBLES ---
         function createBgBubbles() {
@@ -609,47 +629,88 @@
             });
         }
 
-        // --- API INTEGRATION ---
+        // --- API & POLLING ---
 
         async function enviarMensaje(nombre, mensaje) {
-            const texto = `🔔 NUEVO MENSAJE RECIBIDO
+            conversationId = generarId();
+            const timestamp = new Date().toISOString();
+
+            // Notify Admin via CallMeBot
+            const textoAdmin = `🔔 NUEVO MENSAJE EN EL CHAT
 ━━━━━━━━━━━━━━━━━━━━
 👤 Nombre: ${nombre}
-📋 Asunto: Necesito información
 💬 Mensaje: ${mensaje}
+⏰ Hora: ${new Date().toLocaleString('es-CO')}
 ━━━━━━━━━━━━━━━━━━━━
-_Enviado desde tu página web_`;
+📲 Responde en: ${window.location.origin}/admin-chat.html`;
 
-            const url = `${CONFIG.baseUrl}?phone=${CONFIG.phone}&text=${encodeURIComponent(texto)}&apikey=${CONFIG.apiKey}`;
+            const url = `${CONFIG.baseUrl}?phone=${CONFIG.phone}&text=${encodeURIComponent(textoAdmin)}&apikey=${CONFIG.apiKey}`;
 
             try {
-                // Send via no-cors (for browser fetch compatibility with basic bot API)
-                await fetch(url, { 
-                    method: 'GET', 
-                    mode: 'no-cors' 
+                fetch(url, { method: 'GET', mode: 'no-cors' });
+
+                // Save to localStorage
+                localStorage.setItem(conversationId, JSON.stringify({
+                    nombre,
+                    mensajes: [{ sender: 'user', texto: mensaje, hora: timestamp }]
+                }));
+
+                const todas = JSON.parse(localStorage.getItem('todas_conversaciones') || '[]');
+                todas.unshift({
+                    id: conversationId,
+                    nombre,
+                    ultimoMensaje: mensaje,
+                    hora: timestamp,
+                    sinLeer: true
                 });
+                localStorage.setItem('todas_conversaciones', JSON.stringify(todas));
+
+                await new Promise(r => setTimeout(r, 1500));
                 
-                // Extra delay for realism
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await botReply(`⏳ Tu mensaje fue enviado ${nombre}. Estamos revisando tu consulta... Te responderemos aquí mismo en breve 👇`);
                 
-                await botReply(`✅ ¡Listo ${nombre}! Tu mensaje fue enviado exitosamente. Te responderemos muy pronto 🚀`);
+                // Show waiting indicator
+                waitingIndicator.classList.remove('hidden');
                 
-                // Extra button for direct WA
-                const directDiv = document.createElement('div');
-                directDiv.style.textAlign = 'center';
-                directDiv.style.marginTop = '10px';
-                directDiv.className = 'reveal';
-                directDiv.innerHTML = `<a href="https://wa.me/${CONFIG.phone}" target="_blank" class="btn-direct" style="padding: 12px 25px; display: inline-block;">💬 ¿Prefieres escribirnos directo?</a>`;
-                chatMessages.appendChild(directDiv);
-                
-                mostrarConfeti();
+                iniciarPolling(conversationId);
 
             } catch (error) {
-                await botReply('❌ Hubo un error al enviar. Por favor intenta de nuevo.');
+                await botReply('❌ Error al conectar. Intenta de nuevo.');
                 currentState = 'MESSAGE_INPUT';
                 document.getElementById('chatInput').disabled = false;
                 sendButton.disabled = false;
             }
+        }
+
+        function iniciarPolling(id) {
+            const polling = setInterval(() => {
+                const resKey = 'respuesta_' + id;
+                const respuesta = JSON.parse(localStorage.getItem(resKey) || 'null');
+
+                if (respuesta && !respuesta.leida) {
+                    clearInterval(polling);
+                    
+                    // Mark as read
+                    respuesta.leida = true;
+                    localStorage.setItem(resKey, JSON.stringify(respuesta));
+
+                    // Update waiting indicator
+                    waitingText.textContent = '✅ ¡Tienes una respuesta!';
+                    waitingIndicator.style.background = 'rgba(37, 211, 102, 0.2)';
+                    
+                    // Bot response animation
+                    setTimeout(async () => {
+                        await botReply(respuesta.texto, {}, 2000);
+                        
+                        // Notify user
+                        document.title = '💬 Nueva respuesta!';
+                        setTimeout(() => document.title = 'Chat · Soporte en Vivo', 4000);
+                        
+                        mostrarConfeti();
+                        waitingIndicator.classList.add('hidden');
+                    }, 500);
+                }
+            }, 3000);
         }
 
         // --- CONFETTI ---
@@ -662,32 +723,18 @@ _Enviado desde tu página web_`;
             const particles = [];
             for (let i = 0; i < 150; i++) {
                 particles.push({
-                    x: Math.random() * canvas.width,
-                    y: -10,
-                    r: Math.random() * 6 + 2,
-                    d: Math.random() * 10,
-                    color: i % 2 === 0 ? '#25D366' : '#128C7E',
-                    tilt: Math.random() * 10 - 10,
-                    speed: Math.random() * 3 + 2
+                    x: Math.random() * canvas.width, y: -10, r: Math.random() * 6 + 2, d: Math.random() * 10,
+                    color: i % 2 === 0 ? '#25D366' : '#128C7E', tilt: Math.random() * 10 - 10, speed: Math.random() * 3 + 2
                 });
             }
 
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 particles.forEach((p, i) => {
-                    ctx.beginPath();
-                    ctx.lineWidth = p.r;
-                    ctx.strokeStyle = p.color;
-                    ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
-                    ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
-                    ctx.stroke();
-
-                    p.y += p.speed;
-                    p.tilt += 0.1;
-                    
-                    if (p.y > canvas.height) {
-                        particles[i].y = -10;
-                    }
+                    ctx.beginPath(); ctx.lineWidth = p.r; ctx.strokeStyle = p.color;
+                    ctx.moveTo(p.x + p.tilt + p.r / 2, p.y); ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+                    ctx.stroke(); p.y += p.speed; p.tilt += 0.1;
+                    if (p.y > canvas.height) particles[i].y = -10;
                 });
                 requestAnimationFrame(draw);
             }

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — Taller Ramírez</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --whatsapp-green: #25D366;
+            --whatsapp-dark: #128C7E;
+            --bg-page: #0d0d0d;
+            --bg-sidebar: #111111;
+            --bg-chat: #1a1a1a;
+            --text-white: #ffffff;
+            --text-gray: #b9b9b9;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-page);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-white);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Login Screen */
+        #loginScreen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-page);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .login-card {
+            background: var(--bg-chat);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 0 40px rgba(37, 211, 102, 0.1);
+        }
+        .login-card i { font-size: 3rem; color: var(--whatsapp-green); margin-bottom: 20px; }
+        .login-card h2 { margin-bottom: 20px; font-family: 'Outfit'; }
+        .login-card input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #222;
+            color: white;
+            outline: none;
+            text-align: center;
+        }
+        .login-card button {
+            width: 100%;
+            padding: 12px;
+            background: var(--whatsapp-green);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Main Layout */
+        #adminApp {
+            display: none; /* Hidden until login */
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-sidebar);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .dot-active {
+            width: 8px; height: 8px; background: var(--whatsapp-green);
+            border-radius: 50%; display: inline-block; margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .conv-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .conv-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .conv-item:hover { background: rgba(37, 211, 102, 0.05); }
+        .conv-item.active { background: rgba(37, 211, 102, 0.1); border-left: 4px solid var(--whatsapp-green); }
+        .avatar {
+            width: 45px; height: 45px; background: #333;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; color: var(--whatsapp-green); font-size: 1.2rem;
+        }
+        .conv-info { flex: 1; overflow: hidden; }
+        .conv-info h4 { margin: 0; font-size: 0.95rem; }
+        .conv-info p { margin: 2px 0 0; font-size: 0.8rem; color: var(--text-gray); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .conv-meta { text-align: right; }
+        .conv-time { font-size: 0.7rem; color: var(--whatsapp-green); display: block; }
+        .badge { background: #ff4d4d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; }
+
+        /* Chat Area */
+        .chat-area {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-chat);
+            position: relative;
+        }
+        .chat-banner {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            flex-direction: column; color: #444; gap: 20px;
+        }
+        .chat-banner i { font-size: 5rem; }
+        
+        #messagesDisplay {
+            flex: 1; padding: 30px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .bubble {
+            max-width: 70%; padding: 12px 18px; border-radius: 15px; font-size: 0.95rem; line-height: 1.4;
+        }
+        .bubble.user { align-self: flex-start; background: #333; color: white; border-radius: 0 15px 15px 15px; }
+        .bubble.admin { align-self: flex-end; background: var(--whatsapp-green); color: white; border-radius: 15px 0 15px 15px; }
+
+        .chat-footer {
+            padding: 20px; background: var(--bg-sidebar); display: flex; gap: 12px;
+        }
+        #replyInput {
+            flex: 1; background: #222; border: 1px solid #333; border-radius: 10px;
+            color: white; padding: 12px 15px; outline: none; transition: 0.3s;
+        }
+        #replyInput:focus { border-color: var(--whatsapp-green); }
+        .btn-reply {
+            background: var(--whatsapp-green); color: white; border: none;
+            padding: 0 20px; border-radius: 10px; font-weight: 600; cursor: pointer;
+        }
+        .btn-reply:hover { background: var(--whatsapp-dark); }
+
+        .sidebar-footer { padding: 15px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .btn-clear { width: 100%; background: transparent; color: #666; border: 1px solid #333; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-clear:hover { color: #ff4d4d; border-color: #ff4d4d; }
+
+        @media (max-width: 768px) {
+            #adminApp { grid-template-columns: 1fr; }
+            .sidebar { display: block; }
+            .chat-area { display: none; }
+            .chat-area.active { display: flex; position: absolute; top:0; left:0; width:100%; height:100%; z-index: 100; }
+            .btn-back { display: block; background: none; border:none; color: white; margin-right: 15px; font-size: 1.2rem; }
+        }
+        .btn-back { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Login -->
+    <div id="loginScreen">
+        <div class="login-card">
+            <i class="fas fa-lock"></i>
+            <h2>Panel Admin</h2>
+            <input type="password" id="passwordInput" placeholder="Contraseña">
+            <button onclick="checkLogin()">Entrar al Panel</button>
+            <p id="errorLogin" style="color: #ff4d4d; font-size: 0.8rem; margin-top: 10px; display: none;">Contraseña incorrecta</p>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div id="adminApp">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div>
+                    <span class="dot-active"></span>
+                    <span style="font-weight: 600;">Conversaciones</span>
+                </div>
+                <button onclick="logout()" style="background: none; border:none; color: #666; cursor: pointer;"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+            
+            <div class="conv-list" id="convList">
+                <!-- Items dynamic -->
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="btn-clear" onclick="clearConversations()">Limpiar Conversaciones</button>
+            </div>
+        </aside>
+
+        <main class="chat-area" id="chatArea">
+            <!-- Empty state -->
+            <div class="chat-banner" id="emptyState">
+                <i class="fab fa-whatsapp"></i>
+                <p>Selecciona un chat para responder</p>
+            </div>
+
+            <!-- Active chat -->
+            <div id="activeChat" style="display: none; height: 100%; flex-direction: column;">
+                <header class="sidebar-header">
+                    <button class="btn-back" onclick="hideChatMobile()"><i class="fas fa-arrow-left"></i></button>
+                    <div>
+                        <span id="activeUserName" style="font-weight: 700; font-size: 1.1rem;">Usuario</span>
+                        <p style="font-size: 0.75rem; color: var(--whatsapp-green); margin:0;">En línea</p>
+                    </div>
+                </header>
+                
+                <div id="messagesDisplay">
+                    <!-- Messages dynamic -->
+                </div>
+
+                <div class="chat-footer">
+                    <input type="text" id="replyInput" placeholder="Escribe tu respuesta aquí...">
+                    <button class="btn-reply" onclick="sendReply()">Enviar <i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const PASS = "ramirez2025";
+        let currentUserId = null;
+
+        function checkLogin() {
+            const val = document.getElementById('passwordInput').value;
+            if (val === PASS) {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('adminApp').style.display = 'grid';
+                sessionStorage.setItem('admin_auth', 'true');
+                loadConversations();
+                startAutoCleanup();
+            } else {
+                document.getElementById('errorLogin').style.display = 'block';
+            }
+        }
+
+        // Auto auth if already logged in
+        if (sessionStorage.getItem('admin_auth') === 'true') {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('adminApp').style.display = 'grid';
+            setTimeout(() => {
+                loadConversations();
+                startAutoCleanup();
+            }, 100);
+        }
+
+        function logout() {
+            sessionStorage.removeItem('admin_auth');
+            window.location.reload();
+        }
+
+        function loadConversations() {
+            const todas = JSON.parse(localStorage.getItem('todas_conversaciones') || '[]');
+            const list = document.getElementById('convList');
+            list.innerHTML = '';
+
+            todas.forEach(conv => {
+                const item = document.createElement('div');
+                item.className = `conv-item ${currentUserId === conv.id ? 'active' : ''}`;
+                item.onclick = () => selectChat(conv.id);
+                
+                const initial = conv.nombre.charAt(0).toUpperCase();
+                const time = new Date(conv.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                item.innerHTML = `
+                    <div class="avatar">${initial}</div>
+                    <div class="conv-info">
+                        <h4>${conv.nombre}</h4>
+                        <p>${conv.ultimoMensaje}</p>
+                    </div>
+                    <div class="conv-meta">
+                        <span class="conv-time">${time}</span>
+                        ${conv.sinLeer ? '<span class="badge">Nuevo</span>' : ''}
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+
+            if (todas.length === 0) {
+                list.innerHTML = '<p style="text-align:center; color:#444; margin-top:20px;">No hay conversaciones</p>';
+            }
+        }
+
+        function selectChat(id) {
+            currentUserId = id;
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('activeChat').style.display = 'flex';
+            document.getElementById('chatArea').classList.add('active');
+
+            // Mark as read in list
+            const todas = JSON.parse(localStorage.getItem('todas_conversaciones') || '[]');
+            const idx = todas.findIndex(c => c.id === id);
+            if (idx !== -1) todas[idx].sinLeer = false;
+            localStorage.setItem('todas_conversaciones', JSON.stringify(todas));
+
+            // Load user profile
+            const user = JSON.parse(localStorage.getItem(id) || '{}');
+            document.getElementById('activeUserName').textContent = user.nombre || 'Usuario';
+
+            renderMessages();
+            loadConversations(); // update list highlights
+        }
+
+        function renderMessages() {
+            if (!currentUserId) return;
+            const user = JSON.parse(localStorage.getItem(currentUserId) || '{}');
+            const display = document.getElementById('messagesDisplay');
+            display.innerHTML = '';
+
+            if (user.mensajes) {
+                user.mensajes.forEach(m => {
+                    const bubble = document.createElement('div');
+                    bubble.className = `bubble ${m.sender}`;
+                    bubble.textContent = m.texto;
+                    display.appendChild(bubble);
+                });
+            }
+            display.scrollTop = display.scrollHeight;
+        }
+
+        function sendReply() {
+            const input = document.getElementById('replyInput');
+            const text = input.value.trim();
+            if (!text || !currentUserId) return;
+
+            // Save to history
+            const user = JSON.parse(localStorage.getItem(currentUserId) || '{}');
+            if(!user.mensajes) user.mensajes = [];
+            user.mensajes.push({ sender: 'admin', texto: text, hora: new Date().toISOString() });
+            localStorage.setItem(currentUserId, JSON.stringify(user));
+
+            // Set signal for user polling
+            localStorage.setItem('respuesta_' + currentUserId, JSON.stringify({
+                texto: text,
+                hora: new Date().toISOString(),
+                leida: false
+            }));
+
+            input.value = '';
+            renderMessages();
+            
+            // Update last message in list
+            const todas = JSON.parse(localStorage.getItem('todas_conversaciones') || '[]');
+            const idx = todas.findIndex(c => c.id === currentUserId);
+            if (idx !== -1) {
+                todas[idx].ultimoMensaje = "Tú: " + text;
+                todas[idx].hora = new Date().toISOString();
+                localStorage.setItem('todas_conversaciones', JSON.stringify(todas));
+                loadConversations();
+            }
+        }
+
+        function hideChatMobile() {
+            document.getElementById('chatArea').classList.remove('active');
+            currentUserId = null;
+        }
+
+        function clearConversations() {
+            if (confirm('¿Seguro que quieres borrar todas las conversaciones?')) {
+                localStorage.clear();
+                window.location.reload();
+            }
+        }
+
+        // Auto-cleanup > 24h
+        function startAutoCleanup() {
+            const now = new Date().getTime();
+            const todas = JSON.parse(localStorage.getItem('todas_conversaciones') || '[]');
+            const filtered = todas.filter(conv => {
+                const diff = now - new Date(conv.hora).getTime();
+                const isOld = diff > 24 * 60 * 60 * 1000;
+                if (isOld) {
+                    localStorage.removeItem(conv.id);
+                    localStorage.removeItem('respuesta_' + conv.id);
+                }
+                return !isOld;
+            });
+            localStorage.setItem('todas_conversaciones', JSON.stringify(filtered));
+        }
+
+        // Listen for enter key in input
+        document.getElementById('replyInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendReply();
+        });
+
+        // Polling for new user messages every 3s
+        setInterval(() => {
+            if (sessionStorage.getItem('admin_auth') === 'true') {
+                loadConversations();
+                if (currentUserId) renderMessages();
+            }
+        }, 3000);
+
+    </script>
+</body>
+</html>
